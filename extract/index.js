@@ -5,31 +5,31 @@ const cheerio = require('cheerio');
 
 const outputTempDevDocsHTML = "intercom-dev-docs.html"
 const outputTempDevDocsToJsonFile = "intercom-dev-doc-extract.json"
-const outputFinalPostmanFile =  "intercom-postman-collection.json";
+const outputFinalPostmanFile = "intercom-postman-collection.json";
 const URL = "https://developers.intercom.com/reference";
 
-function readFile(dataFile){
+function readFile(dataFile) {
 	return fs.readFileSync(dataFile);
 }
-function readJsonFromFile(dataFile){
+function readJsonFromFile(dataFile) {
 	return JSON.parse(fs.readFileSync(dataFile));
 }
 
-function writeJSONToFile(input, outputFile){
+function writeJSONToFile(input, outputFile) {
 	const content = JSON.stringify(input, null, 2);
 	fs.writeFileSync(outputFile, content, 'utf8', function (err) {
 		if (err) {
 			console.error("ERROR: Could not write file (" + outputFile + ")\n", err);
 		}
-	}); 
+	});
 }
 
-function writeToFile(content, outputFile){
+function writeToFile(content, outputFile) {
 	fs.writeFileSync(outputFile, content, 'utf8', function (err) {
 		if (err) {
 			console.error("ERROR: Could not write file (" + outputFile + ")\n", err);
 		}
-	}); 
+	});
 }
 
 // Read custom JSON that describe developer docs and convert it into a file for Postman
@@ -41,45 +41,44 @@ function writeToFile(content, outputFile){
 //			code:
 //		}
 //    ]
-function createPostmanOutput(data){
-	var postmanItems = [];	
-	for(var category in data){
+function createPostmanOutput(data) {
+	var postmanItems = [];
+	for (var category in data) {
 		var categoryData = data[category];
 		var postmanCategoryOutput = {
 			name: category,
 			description: "",
 			item: []
 		}
-		categoryData.forEach(function(item){
+		categoryData.forEach(function (item) {
 			if (!item.code.match(/curl/)) return;
-			var code = item.code.replace(/^\#.*\n/m,"").replace(/^\$ /, "").replace(/-d'$/m, "-d '").replace(/:Bearer/gm, ": Bearer").replace(/:application/gm, ": application").replace(/curl \\/gm, "curl ");
-			if(code.match(/-d\s*$/m)){
+			var code = item.code.replace(/^\#.*\n/m, "").replace(/^\$ /, "").replace(/-d'$/m, "-d '").replace(/:Bearer/gm, ": Bearer").replace(/:application/gm, ": application").replace(/curl \\/gm, "curl ");
+			if (code.match(/-d\s*$/m)) {
 				code = code.replace(/-d\s*$/m, "-d '");
 				code += "'";
-				code = code.replace(/-d ''/m,"");
+				code = code.replace(/-d ''/m, "");
 			}
 			var curl = null;
 			var extra = "";
-			try
-			{
+			try {
 				curl = parse(code);
 			}
-			catch(e){
+			catch (e) {
 			}
 
-			if(!curl){
-				console.error("=======================================================================================\n" + 
-				              "ERROR: Can't parse curl for " + category + ": " + item.header + (item.subheader ? " (" + item.subheader + ")": "") +"\n" + 
-				              "---------------------------------------------------------------------------------------\n", 
-				              );
+			if (!curl) {
+				console.error("=======================================================================================\n" +
+					"ERROR: Can't parse curl for " + category + ": " + item.header + (item.subheader ? " (" + item.subheader + ")" : "") + "\n" +
+					"---------------------------------------------------------------------------------------\n",
+				);
 				console.error("original  code\n", item.code);
 				console.error("sanitized code\name", code);
 			}
-			else{
+			else {
 				postmanCategoryOutput.item.push(createPostmanEntry(item, curl));
 			}
 		});
-		if(postmanCategoryOutput.item.length > 0)
+		if (postmanCategoryOutput.item.length > 0)
 			postmanItems.push(postmanCategoryOutput);
 	}
 	return {
@@ -96,9 +95,9 @@ function createPostmanOutput(data){
 // Create a single Postman Entry based on custom JSON that describes a single code block in the developer docs
 // Item format: { header: , subheader: }
 // Output file Will print request text as: "header (subheader)"
-function createPostmanEntry(item, curl){
+function createPostmanEntry(item, curl) {
 	var headers = [];
-	for(var key in curl.header){
+	for (var key in curl.header) {
 		headers.push({
 			key: key,
 			value: (key == "Authorization") ? "Bearer {{AccessToken}}" : curl.header[key],
@@ -106,9 +105,9 @@ function createPostmanEntry(item, curl){
 		})
 	}
 	var name = item.header;
-	if(item.subheader) {
+	if (item.subheader) {
 		item.subheader = item.subheader.replace(/Request & Response\s*/g, "");
-		if(item.subheader){
+		if (item.subheader) {
 			name += " (" + item.subheader + ")";
 		}
 	}
@@ -116,14 +115,14 @@ function createPostmanEntry(item, curl){
 		"name": name,
 		"request": {
 			"url": curl.url,
-			"method" : curl.method,
-			"header" : headers,
+			"method": curl.method,
+			"header": headers,
 			"description": ""
 		},
 		"response": []
 	}
 
-	if(curl.body){
+	if (curl.body) {
 		entry.request.body = {
 			"mode": "raw",
 			"raw": curl.body
@@ -141,50 +140,50 @@ function createPostmanEntry(item, curl){
 //			code:
 //		}
 //    ]
-function convertDeveloperWebsiteHTMLToJson(body){
+function convertDeveloperWebsiteHTMLToJson(body) {
 	const $ = cheerio.load(body)
 	var entries = {};
 	var codeLookup = {};
 
 	// get all codeblocks from website
-	$("#readme-data-docs").data("json").forEach(function(item){
+	$("#readme-data-docs").data("json").forEach(function (item) {
 		var codeBlocks = findCodeBlocks(item);
-		codeBlocks.forEach(function(codeBlock){
-			if(!codeLookup[codeBlock.id]) codeLookup[codeBlock.id] = []
+		codeBlocks.forEach(function (codeBlock) {
+			if (!codeLookup[codeBlock.id]) codeLookup[codeBlock.id] = []
 			codeLookup[codeBlock.id].push(codeBlock);
 		});
 	})
 
 	// get list of categories and requests from sidebar
-	$(".hub-sidebar-category h3").each(function(){
+	$(".hub-sidebar-category h3").each(function () {
 		item = $(this);
 		const category = item.text();
 
-		item.parent().find("li").each(function(){
+		item.parent().find("li").each(function () {
 			li = $(this);
 
 			const title = li.text();
 			const extractID = li.attr("ng-class").match(/isActive\('([^']+)'/)
-			if(extractID){
+			if (extractID) {
 				var codeBlocks = codeLookup[extractID[1]];
-				if(codeBlocks){
+				if (codeBlocks) {
 					codeBlocks.forEach(codeBlock => {
 						var entry = {
 							"header": title || codeBlock.title,
 							"subheader": codeBlock.subheader.trim().
-							                                 replace(/^\*\*/gi, "").
-							                                 replace(/\*\*$/gi, "").
-							                                 replace(/^example /gi, "").
-							                                 replace(/ ?request$/gi, "").
-							                                 trim(),
+								replace(/^\*\*/gi, "").
+								replace(/\*\*$/gi, "").
+								replace(/^example /gi, "").
+								replace(/ ?request$/gi, "").
+								trim(),
 							"code": codeBlock.code
 						}
-						if(!entries[category]) entries[category] = [];
+						if (!entries[category]) entries[category] = [];
 						entries[category].push(entry);
 					});
 				}
 			}
-			else{
+			else {
 				console.error(`Could not extract ID for ${title}. Extracting from: ${li.attr("ng-class")}`);
 			}
 		});
@@ -192,9 +191,9 @@ function convertDeveloperWebsiteHTMLToJson(body){
 	return entries;
 }
 
-function createPostmanCollection(input, output){
+function createPostmanCollection(input, output) {
 	var postmanOutput = createPostmanOutput(readJsonFromFile(input));
-	writeJSONToFile(postmanOutput,output);
+	writeJSONToFile(postmanOutput, output);
 }
 
 
@@ -206,7 +205,7 @@ function createPostmanCollection(input, output){
 //    Category
 //       Title (subheader)
 //       Title (subheader)
-function findCodeBlocks(item){
+function findCodeBlocks(item) {
 	const text = item.body;
 	var blocks = []
 	var start = 0;
@@ -214,15 +213,15 @@ function findCodeBlocks(item){
 	var block = null;
 	var subheader = null;
 	var code = null;
-	var currentSubheader = {text: ''};
-	do{
-		if(subheader != null && code != null){
-			if(subheader.new_start < code.new_start){
+	var currentSubheader = { text: '' };
+	do {
+		if (subheader != null && code != null) {
+			if (subheader.new_start < code.new_start) {
 				currentSubheader = subheader;
 				subheader = null;
 			}
 		}
-		if(code != null){
+		if (code != null) {
 			codeBlockJson = JSON.parse(code.block);
 			curlCommands = codeBlockJson.codes.filter(x => x.language == "curl" && x.name != 'cURL HTTP Response' && x.name != 'cURL HTTP Request' && x.name != 'cURL HTTP Respnse');
 			curlCommands.forEach(curlCommand => {
@@ -239,7 +238,7 @@ function findCodeBlocks(item){
 		code = findCodeBlock(text, start);
 		subheader = findSubheaderBlock(text, start);
 	}
-	while(code != null || subheader != null);
+	while (code != null || subheader != null);
 	return blocks;
 }
 
@@ -251,23 +250,20 @@ const START_BLOCK_SUB_HEADER = "[block:textarea]";
 const START_BLOCK_CODE = "[block:code]";
 const END_BLOCK = "[/block]";
 
-function findCodeBlock(text, start_position)
-{
+function findCodeBlock(text, start_position) {
 	return findBlock(text, "Code", START_BLOCK_CODE, END_BLOCK, start_position);
 }
-function findSubheaderBlock(text, start_position)
-{
+function findSubheaderBlock(text, start_position) {
 	const block = findBlock(text, "Subheader", START_BLOCK_SUB_HEADER, END_BLOCK, start_position);
-	if(block == null) return null;
+	if (block == null) return null;
 	block.text = JSON.parse(block.block).text;
 	return block;
 }
-function findBlock(text, type, start_text, end_text, start_position)
-{
+function findBlock(text, type, start_text, end_text, start_position) {
 	var start = text.indexOf(start_text, start_position);
-	if(start == -1) return null;
-	var end = text.indexOf(end_text , start);
-	if(end == -1) return null;
+	if (start == -1) return null;
+	var end = text.indexOf(end_text, start);
+	if (end == -1) return null;
 
 
 	var block = text.substring(start + start_text.length, end);
@@ -282,16 +278,16 @@ function findBlock(text, type, start_text, end_text, start_position)
 // Do the download and extraction
 console.log(`Downloading dev docs: ${URL}....`);
 
-const do_download = false;
-if(do_download){
+const do_download = true;
+if (do_download) {
 	request.get(URL, function (error, response, body) {
 		error = false;
-		if(error){
+		if (error) {
 			console.error("ERROR: Could not download page", error);
 		}
 		else {
 			writeToFile(body, outputTempDevDocsHTML);
-			if (response.statusCode != 200){
+			if (response.statusCode != 200) {
 				console.warn("WARNING: Expected response code of 200 but got " + response.statusCode + ". Data may not be properly returned but will try parsing anyway");
 			}
 			var entries = convertDeveloperWebsiteHTMLToJson(body);
@@ -300,7 +296,7 @@ if(do_download){
 		}
 	});
 }
-else{
+else {
 	createPostmanCollection(outputTempDevDocsToJsonFile, outputFinalPostmanFile);
 }
 
